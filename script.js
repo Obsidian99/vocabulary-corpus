@@ -5,10 +5,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let vocabularyData = []; // To store the loaded vocabulary
 
     // 1. Load the vocabulary data
-    async function word() {
+    async function LoadVocabulary() {
         try {
             // 确保 vocabulary_corpus.json 与 index.html 在同一仓库的同一级别或可访问路径
-            const response = await fetch('word.txt');
+            const response = await fetch('vocabulary_corpus.json');
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
