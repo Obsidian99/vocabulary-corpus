@@ -2,93 +2,107 @@ document.addEventListener('DOMContentLoaded', () => {
     const searchInput = document.getElementById('searchInput');
     const searchButton = document.getElementById('searchButton');
     const resultsDiv = document.getElementById('results');
-    let vocabularyData = []; // To store the loaded vocabulary
 
-    // 1. Load the vocabulary data
-    async function LoadVocabulary() {
-        try {
-            // 确保 vocabulary_corpus.json 与 index.html 在同一仓库的同一级别或可访问路径
-            const response = await fetch('vocabulary_corpus.json');
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            vocabularyData = await response.json();
-            console.log('Vocabulary loaded successfully:', vocabularyData.length, 'words');
-            // 可选：构建一个更快的查找结构，例如一个对象/map
-            // buildIndex();
-        } catch (error) {
-            console.error('Error loading vocabulary:', error);
-            resultsDiv.innerHTML = '<p>Error loading vocabulary data. Please try again later.</p>';
-        }
-    }
-
-    // 可选：为快速查找构建索引 (如果数据量大，这很重要)
-    let wordIndex = {};
-    function buildIndex() {
-        wordIndex = vocabularyData.reduce((acc, entry) => {
-            if (entry.word) {
-                acc[entry.word.toLowerCase()] = entry;
-            }
-            return acc;
-        }, {});
-        console.log("Index built.");
-    }
-
-
-    // 2. Search function
-    function searchWord(term) {
+    async function searchWord(term) {
         resultsDiv.innerHTML = ''; // Clear previous results
-        if (!term) {
+        if (!term || term.trim() === '') {
             resultsDiv.innerHTML = '<p>Please enter a word to search.</p>';
             return;
         }
 
-        const searchTerm = term.toLowerCase();
-        let foundEntry = null;
+        const searchTerm = term.trim().toLowerCase(); // Normalize: trim and lowercase
+        const filePath = `data/${searchTerm}.json`; // Construct path, e.g., data/democracy.json
 
-        // 如果使用了索引:
-        // foundEntry = wordIndex[searchTerm];
+        try {
+            console.log(`Attempting to fetch: ${filePath}`);
+            const response = await fetch(filePath);
 
-        // 如果没有使用索引 (遍历数组):
-        if (vocabularyData && vocabularyData.length > 0) {
-             foundEntry = vocabularyData.find(entry => entry.word && entry.word.toLowerCase() === searchTerm);
-        } else {
-            resultsDiv.innerHTML = '<p>Vocabulary data not loaded yet or is empty.</p>';
-            return;
-        }
+            if (!response.ok) {
+                if (response.status === 404) {
+                    resultsDiv.innerHTML = `<p>No data found for "${term}". The file "${filePath}" was not found. Check if the word is correct and the corresponding JSON file exists with a lowercase name in the 'data' folder.</p>`;
+                } else {
+                    resultsDiv.innerHTML = `<p>Error fetching data for "${term}". Server responded with status: ${response.status}</p>`;
+                }
+                return;
+            }
 
+            const entryData = await response.json();
+            displayEntry(entryData, term);
 
-        if (foundEntry) {
-            displayEntry(foundEntry);
-        } else {
-            resultsDiv.innerHTML = `<p>Word "${term}" not found.</p>`;
+        } catch (error) {
+            console.error('Error fetching or parsing word data:', error);
+            resultsDiv.innerHTML = `<p>An error occurred while processing "${term}". Please check the console for more details.</p>`;
         }
     }
 
-    // 3. Display function
-    function displayEntry(entry) {
-        let content = `<h2>${entry.word}</h2>`;
-        if (entry.phonetic) content += `<p><strong>Phonetic:</strong> ${entry.phonetic}</p>`;
-        if (entry.definition) content += `<p><strong>Definition:</strong> ${entry.definition}</p>`;
-        if (entry.etymology) content += `<p><strong>Etymology:</strong> ${entry.etymology}</p>`;
-        if (entry.phrase) content += `<p><strong>Phrase:</strong> ${entry.phrase}</p>`;
-        if (entry.example) content += `<p><strong>Example:</strong> ${entry.example}</p>`;
-        if (entry.culture) content += `<p><strong>Culture:</strong> ${entry.culture}</p>`;
+    function displayEntry(entryData, searchedTermOriginalCase) {
+        // entryData is the parsed JSON from a file like data/democracy.json
+        // Refer to your "数据结构" image for the fields
+        let content = `<h2>${entryData.word || searchedTermOriginalCase}</h2>`; // Use 'word' from JSON, or the user's original input
+
+        if (entryData.phonetics) {
+            if (entryData.phonetics.british) {
+                content += `<p><strong>British Phonetic:</strong> ${entryData.phonetics.british}</p>`;
+            }
+            if (entryData.phonetics.american) {
+                content += `<p><strong>American Phonetic:</strong> ${entryData.phonetics.american}</p>`;
+            }
+        }
+
+        if (entryData.definitions && Array.isArray(entryData.definitions) && entryData.definitions.length > 0) {
+            content += '<h3>Definitions:</h3>';
+            entryData.definitions.forEach((def, index) => {
+                content += `<div class="definition-block" style="margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #eee;">`;
+                content += `<h4>Definition ${index + 1}</h4>`;
+                if (def.partOfSpeech) content += `<p><strong>Part of Speech:</strong> ${def.partOfSpeech}</p>`;
+                if (def.definition) content += `<p><strong>Definition (EN):</strong> ${def.definition}</p>`;
+                if (def.chineseTranslation) content += `<p><strong>Chinese Translation:</strong> ${def.chineseTranslation}</p>`;
+                if (def.level) content += `<p><strong>Level:</strong> ${def.level}</p>`;
+                if (def.frequency) content += `<p><strong>Frequency:</strong> ${def.frequency}</p>`;
+                if (def.register) content += `<p><strong>Register:</strong> ${def.register}</p>`;
+                content += '</div>';
+            });
+        } else {
+            content += '<p>No definitions provided in the data.</p>';
+        }
+
+        if (entryData.phrases && Array.isArray(entryData.phrases) && entryData.phrases.length > 0) {
+            content += `<h3>Phrases:</h3><ul>`;
+            entryData.phrases.forEach(phrase => content += `<li>${phrase}</li>`);
+            content += `</ul>`;
+        }
+
+        if (entryData.examples && Array.isArray(entryData.examples) && entryData.examples.length > 0) {
+            content += `<h3>Examples:</h3><ul>`;
+            entryData.examples.forEach(example => content += `<li>${example}</li>`);
+            content += `</ul>`;
+        }
+
+        if (entryData.etymology) {
+            content += `<h3>Etymology:</h3><p>${typeof entryData.etymology === 'string' ? entryData.etymology : JSON.stringify(entryData.etymology)}</p>`;
+        }
+
+        // Add more fields as needed from your "数据结构", e.g.:
+        // difficultyAnalysis, semanticRelations, culturalContext, memoryAids, grammaticalInfo, metadata
+        // Example for a simple object display:
+        // if (entryData.difficultyAnalysis) {
+        //     content += `<h3>Difficulty Analysis:</h3><pre>${JSON.stringify(entryData.difficultyAnalysis, null, 2)}</pre>`;
+        // }
+
         resultsDiv.innerHTML = content;
     }
 
-    // Event listeners
-    searchButton.addEventListener('click', () => searchWord(searchInput.value));
+    searchButton.addEventListener('click', () => {
+        searchWord(searchInput.value);
+    });
+
     searchInput.addEventListener('keypress', (event) => {
         if (event.key === 'Enter') {
             searchWord(searchInput.value);
         }
     });
 
-    // Load data when the page loads
-    loadVocabulary().then(() => {
-        if (vocabularyData && vocabularyData.length > 0) {
-             buildIndex(); // 构建索引以加快搜索速度
-        }
-    });
+    // You could also fetch word.txt here to populate suggestions or for other logic
+    // For now, this script directly tries to fetch the word's JSON file.
+    console.log("Dictionary script loaded. Ready to search.");
 });
